@@ -1,0 +1,17 @@
+{
+  "task_name": "classification_cc50_gt_median",
+  "problem_type": "classification",
+  "target_column": "CC50, mM",
+  "primary_metric": "roc_auc",
+  "evaluation_strategy": "holdout",
+  "model_name": "dummy",
+  "mode": "direct",
+  "fit_seconds": 2.0406846670084633,
+  "best_params_json": "{\"strategy\": \"stratified\"}",
+  "roc_auc": 0.4475247524752475,
+  "roc_auc_std": 0.0,
+  "f1": 0.43564356435643564,
+  "f1_std": 0.0,
+  "balanced_accuracy": 0.4328217821782178,
+  "balanced_accuracy_std": 0.0
+}

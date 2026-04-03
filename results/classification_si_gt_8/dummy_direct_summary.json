@@ -1,0 +1,19 @@
+{
+  "task_name": "classification_si_gt_8",
+  "problem_type": "classification",
+  "target_column": "SI",
+  "primary_metric": "pr_auc",
+  "evaluation_strategy": "holdout",
+  "model_name": "dummy",
+  "mode": "direct",
+  "fit_seconds": 2.0029270419909153,
+  "best_params_json": "{\"strategy\": \"stratified\"}",
+  "roc_auc": 0.5486111111111112,
+  "roc_auc_std": 0.0,
+  "f1": 0.34285714285714286,
+  "f1_std": 0.0,
+  "balanced_accuracy": 0.49612403100775193,
+  "balanced_accuracy_std": 0.0,
+  "pr_auc": 0.3843479673703554,
+  "pr_auc_std": 0.0
+}

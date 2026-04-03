@@ -1,0 +1,2 @@
+mae,rmse,r2,fold,best_params_json
+230.24122293601616,517.8252444058228,0.19611581503947773,holdout,"{""C"": 10.0, ""epsilon"": 0.5, ""gamma"": ""auto""}"

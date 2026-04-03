@@ -1,0 +1,2 @@
+roc_auc,f1,balanced_accuracy,fold,best_params_json
+0.7104455445544554,0.6298342541436464,0.6661881188118812,holdout,"{""class_weight"": ""balanced"", ""max_depth"": 8, ""max_features"": 0.5, ""min_samples_leaf"": 5}"

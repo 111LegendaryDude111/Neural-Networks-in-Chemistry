@@ -1,0 +1,2 @@
+mae,rmse,r2,fold,best_params_json
+181.95432607845953,1427.8910188156224,-0.01503127938913762,holdout,"{""cc50_component"": {""strategy"": ""median""}, ""ic50_component"": {""strategy"": ""median""}}"

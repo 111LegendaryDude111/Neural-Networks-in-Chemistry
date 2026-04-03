@@ -1,0 +1,6 @@
+2026-03-30 12:29:26,480 | INFO | Running classification_si_gt_8 with models: ['dummy', 'logistic_regression', 'svc', 'random_forest']
+2026-03-30 12:29:26,480 | INFO | Evaluating model dummy
+2026-03-30 12:29:28,485 | INFO | Evaluating model logistic_regression
+2026-03-30 12:29:29,587 | INFO | Evaluating model svc
+2026-03-30 12:29:31,318 | INFO | Evaluating model random_forest
+2026-03-30 12:29:53,707 | INFO | Finished classification_si_gt_8. Winner: random_forest

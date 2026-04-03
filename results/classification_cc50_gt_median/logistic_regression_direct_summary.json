@@ -1,0 +1,17 @@
+{
+  "task_name": "classification_cc50_gt_median",
+  "problem_type": "classification",
+  "target_column": "CC50, mM",
+  "primary_metric": "roc_auc",
+  "evaluation_strategy": "holdout",
+  "model_name": "logistic_regression",
+  "mode": "direct",
+  "fit_seconds": 1.137782124991645,
+  "best_params_json": "{\"C\": 0.1, \"class_weight\": null}",
+  "roc_auc": 0.8373267326732674,
+  "roc_auc_std": 0.0,
+  "f1": 0.7557603686635944,
+  "f1_std": 0.0,
+  "balanced_accuracy": 0.7359405940594059,
+  "balanced_accuracy_std": 0.0
+}

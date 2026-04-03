@@ -1,0 +1,34 @@
+{
+  "task_name": "classification_si_gt_median",
+  "title": "Classification: SI > 3.846154",
+  "problem_type": "classification",
+  "target_column": "SI",
+  "threshold": 3.846154,
+  "primary_metric": "roc_auc",
+  "evaluation_strategy": "holdout",
+  "random_seed": 42,
+  "data_contract_path": "/Users/davidsukhashvili/Desktop/ML/MEPhi/ClassicMl/Neural Networks in Chemistry/results/data_contract.json",
+  "leaderboard_path": "/Users/davidsukhashvili/Desktop/ML/MEPhi/ClassicMl/Neural Networks in Chemistry/results/classification_si_gt_median/leaderboard.csv",
+  "winner": {
+    "task_name": "classification_si_gt_median",
+    "problem_type": "classification",
+    "target_column": "SI",
+    "primary_metric": "roc_auc",
+    "evaluation_strategy": "holdout",
+    "model_name": "svc",
+    "mode": "direct",
+    "fit_seconds": 1.7563269579986809,
+    "best_params_json": "{\"C\": 1.0, \"class_weight\": \"balanced\", \"gamma\": \"scale\"}",
+    "roc_auc": 0.7271782178217822,
+    "roc_auc_std": 0.0,
+    "f1": 0.6559139784946236,
+    "f1_std": 0.0,
+    "balanced_accuracy": 0.6812376237623763,
+    "balanced_accuracy_std": 0.0
+  },
+  "label_distribution": {
+    "0": 501,
+    "1": 500
+  },
+  "winner_confusion_matrix_path": "/Users/davidsukhashvili/Desktop/ML/MEPhi/ClassicMl/Neural Networks in Chemistry/results/classification_si_gt_median/winner_confusion_matrix.png"
+}

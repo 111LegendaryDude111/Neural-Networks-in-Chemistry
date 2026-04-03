@@ -1,0 +1,2 @@
+mae,rmse,r2,fold,best_params_json
+177.64652405416675,1421.3659257857169,-0.005775614435280296,holdout,"{""cc50_component"": {""max_depth"": null, ""max_features"": 0.5, ""min_samples_leaf"": 1}, ""ic50_component"": {""max_depth"": null, ""max_features"": 0.5, ""min_samples_leaf"": 1}}"

@@ -1,0 +1,2 @@
+roc_auc,f1,balanced_accuracy,fold,best_params_json
+0.49787128712871287,0.5098039215686274,0.5025742574257426,holdout,"{""strategy"": ""stratified""}"

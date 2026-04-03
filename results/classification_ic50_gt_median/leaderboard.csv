@@ -1,0 +1,5 @@
+task_name,problem_type,target_column,primary_metric,evaluation_strategy,model_name,mode,fit_seconds,best_params_json,roc_auc,roc_auc_std,f1,f1_std,balanced_accuracy,balanced_accuracy_std
+classification_ic50_gt_median,classification,"IC50, mM",roc_auc,holdout,random_forest,direct,20.722002291004173,"{""class_weight"": null, ""max_depth"": 8, ""max_features"": ""sqrt"", ""min_samples_leaf"": 1}",0.785990099009901,0.0,0.7476635514018691,0.0,0.7310396039603961,0.0
+classification_ic50_gt_median,classification,"IC50, mM",roc_auc,holdout,svc,direct,1.7782423329917947,"{""C"": 1.0, ""class_weight"": null, ""gamma"": ""scale""}",0.7781683168316832,0.0,0.7272727272727273,0.0,0.7162376237623762,0.0
+classification_ic50_gt_median,classification,"IC50, mM",roc_auc,holdout,logistic_regression,direct,6.222683833009796,"{""C"": 0.1, ""class_weight"": null, ""penalty"": ""l2""}",0.7473267326732673,0.0,0.7024390243902439,0.0,0.6964356435643564,0.0
+classification_ic50_gt_median,classification,"IC50, mM",roc_auc,holdout,dummy,direct,2.034254375001183,"{""strategy"": ""stratified""}",0.46267326732673264,0.0,0.46766169154228854,0.0,0.46767326732673264,0.0

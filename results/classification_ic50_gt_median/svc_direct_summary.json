@@ -1,0 +1,17 @@
+{
+  "task_name": "classification_ic50_gt_median",
+  "problem_type": "classification",
+  "target_column": "IC50, mM",
+  "primary_metric": "roc_auc",
+  "evaluation_strategy": "holdout",
+  "model_name": "svc",
+  "mode": "direct",
+  "fit_seconds": 1.7782423329917947,
+  "best_params_json": "{\"C\": 1.0, \"class_weight\": null, \"gamma\": \"scale\"}",
+  "roc_auc": 0.7781683168316832,
+  "roc_auc_std": 0.0,
+  "f1": 0.7272727272727273,
+  "f1_std": 0.0,
+  "balanced_accuracy": 0.7162376237623762,
+  "balanced_accuracy_std": 0.0
+}

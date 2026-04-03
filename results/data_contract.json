@@ -1,0 +1,26 @@
+{
+  "dataset_path": "data/data.xlsx",
+  "checksum_sha256": "87fabec4e77159df7482ca480236712c031500d3935141b3231368d83a67c659",
+  "rows": 1001,
+  "columns": 214,
+  "feature_count": 210,
+  "missing_values": 36,
+  "duplicates": 0,
+  "target_columns": [
+    "IC50, mM",
+    "CC50, mM",
+    "SI"
+  ],
+  "thresholds": {
+    "ic50_gt_median": 46.585183,
+    "cc50_gt_median": 411.039342,
+    "si_gt_median": 3.846154,
+    "si_gt_8": 8.0
+  },
+  "leakage_rules": [
+    "Drop mandatory columns: Unnamed: 0, IC50, CC50, SI and actual target columns with units.",
+    "Reject any feature whose normalized name contains standalone tokens ic50, cc50, si, or selectivity_index.",
+    "Validate that feature matrix contains only numeric descriptor columns.",
+    "Validate before every task and persist a leakage_check.json artifact."
+  ]
+}

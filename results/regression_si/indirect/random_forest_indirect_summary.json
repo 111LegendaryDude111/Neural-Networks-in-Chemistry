@@ -1,0 +1,17 @@
+{
+  "task_name": "regression_si",
+  "problem_type": "regression",
+  "target_column": "SI",
+  "primary_metric": "mae",
+  "evaluation_strategy": "holdout",
+  "model_name": "random_forest",
+  "mode": "indirect",
+  "fit_seconds": 30.102153917003307,
+  "best_params_json": "{\"cc50_component\": {\"max_depth\": null, \"max_features\": 0.5, \"min_samples_leaf\": 1}, \"ic50_component\": {\"max_depth\": null, \"max_features\": 0.5, \"min_samples_leaf\": 1}}",
+  "mae": 177.64652405416675,
+  "mae_std": 0.0,
+  "rmse": 1421.3659257857169,
+  "rmse_std": 0.0,
+  "r2": -0.005775614435280296,
+  "r2_std": 0.0
+}

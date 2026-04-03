@@ -1,0 +1,6 @@
+2026-03-30 12:26:06,247 | INFO | Running regression_cc50 with models: ['dummy', 'ridge', 'svr', 'random_forest']
+2026-03-30 12:26:06,247 | INFO | Evaluating model dummy
+2026-03-30 12:26:07,949 | INFO | Evaluating model ridge
+2026-03-30 12:26:09,442 | INFO | Evaluating model svr
+2026-03-30 12:26:10,183 | INFO | Evaluating model random_forest
+2026-03-30 12:26:24,506 | INFO | Finished regression_cc50. Winner: random_forest
