@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib.util import find_spec
+from typing import Callable
 
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.ensemble import (
@@ -22,10 +23,9 @@ from src.common.config import RANDOM_SEED
 @dataclass(frozen=True)
 class ModelSpec:
     name: str
-    estimator_factory: callable
+    estimator_factory: Callable[[], object]
     param_grid: dict[str, list]
     requires_scaling: bool = False
-    optional_dependency: str | None = None
 
 
 def _catboost_available() -> bool:
@@ -99,7 +99,9 @@ def regression_model_specs(include_catboost: bool = True) -> list[ModelSpec]:
         ),
         ModelSpec(
             name="gradient_boosting",
-            estimator_factory=lambda: GradientBoostingRegressor(random_state=RANDOM_SEED),
+            estimator_factory=lambda: GradientBoostingRegressor(
+                random_state=RANDOM_SEED
+            ),
             param_grid={
                 "n_estimators": [100, 200],
                 "learning_rate": [0.03, 0.1],
@@ -127,7 +129,6 @@ def regression_model_specs(include_catboost: bool = True) -> list[ModelSpec]:
                     "learning_rate": [0.03, 0.1],
                     "l2_leaf_reg": [1, 3, 5],
                 },
-                optional_dependency="catboost",
             )
         )
 
@@ -204,7 +205,9 @@ def classification_model_specs(include_catboost: bool = True) -> list[ModelSpec]
         ),
         ModelSpec(
             name="gradient_boosting",
-            estimator_factory=lambda: GradientBoostingClassifier(random_state=RANDOM_SEED),
+            estimator_factory=lambda: GradientBoostingClassifier(
+                random_state=RANDOM_SEED
+            ),
             param_grid={
                 "n_estimators": [100, 200],
                 "learning_rate": [0.03, 0.1],
@@ -232,7 +235,6 @@ def classification_model_specs(include_catboost: bool = True) -> list[ModelSpec]
                     "learning_rate": [0.03, 0.1],
                     "l2_leaf_reg": [1, 3, 5],
                 },
-                optional_dependency="catboost",
             )
         )
 

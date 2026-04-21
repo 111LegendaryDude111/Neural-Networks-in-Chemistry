@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import time
@@ -20,18 +19,20 @@ from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.model_selection import GridSearchCV, train_test_split
 
 from src.common.config import (
-    HOLDOUT_TEST_SIZE,
-    INNER_FOLDS,
-    OUTER_FOLDS,
-    RANDOM_SEED,
     REPORTS_DIR,
     RESULTS_DIR,
-    TARGET_COLUMNS,
+    TASKS,
     TaskConfig,
 )
 from src.common.cv import describe_evaluation_strategy, make_splitter
-from src.common.data import prepare_task_data
-from src.common.io import ensure_dir, ensure_project_dirs, write_dataframe, write_json, write_text
+from src.common.data import build_data_contract, find_dataset_path, load_dataset
+from src.common.io import (
+    ensure_dir,
+    ensure_project_dirs,
+    write_dataframe,
+    write_json,
+    write_text,
+)
 from src.common.logging_utils import setup_logger
 from src.common.metrics import (
     classification_scoring,
@@ -48,9 +49,62 @@ from src.common.preprocessing import (
     clip_regression_predictions,
     extract_final_estimator,
     prefix_param_grid,
+    prepare_task_data,
 )
 
 matplotlib.use("Agg")
+
+REPORT_COLUMN_TRANSLATIONS = {
+    "task_name": "Код задачи",
+    "problem_type": "Тип задачи",
+    "target_column": "Целевая переменная",
+    "primary_metric": "Основная метрика",
+    "evaluation_strategy": "Стратегия оценки",
+    "model_name": "Модель",
+    "mode": "Режим",
+    "fit_seconds": "Время обучения, с",
+    "best_params_json": "Лучшие параметры (JSON)",
+    "mae": "MAE",
+    "mae_std": "MAE std",
+    "rmse": "RMSE",
+    "rmse_std": "RMSE std",
+    "r2": "R2",
+    "r2_std": "R2 std",
+    "roc_auc": "ROC-AUC",
+    "roc_auc_std": "ROC-AUC std",
+    "f1": "F1",
+    "f1_std": "F1 std",
+    "balanced_accuracy": "Balanced Accuracy",
+    "balanced_accuracy_std": "Balanced Accuracy std",
+    "pr_auc": "PR-AUC",
+    "pr_auc_std": "PR-AUC std",
+    "title": "Название",
+    "primary_metric_name": "Код основной метрики",
+}
+
+REPORT_VALUE_TRANSLATIONS = {
+    "problem_type": {"regression": "регрессия", "classification": "классификация"},
+    "evaluation_strategy": {"holdout": "отложенная выборка", "nested": "вложенная CV"},
+    "mode": {"direct": "прямой", "indirect": "косвенный"},
+}
+
+
+def localize_report_value(column: str, value):
+    return REPORT_VALUE_TRANSLATIONS.get(column, {}).get(value, value)
+
+
+def localize_leakage_status(status: str) -> str:
+    return {"passed": "пройдено", "failed": "не пройдено"}.get(status, status)
+
+
+def leaderboard_to_markdown(frame: pd.DataFrame) -> str:
+    localized = frame.copy()
+    for column, mapping in REPORT_VALUE_TRANSLATIONS.items():
+        if column in localized.columns:
+            localized[column] = localized[column].map(
+                lambda value: mapping.get(value, value)
+            )
+    return localized.rename(columns=REPORT_COLUMN_TRANSLATIONS).to_markdown(index=False)
 
 
 @dataclass
@@ -67,33 +121,14 @@ class EvaluatedModel:
     component_importances: dict[str, pd.DataFrame] | None = None
 
 
-def build_task_parser(task_config: TaskConfig) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=task_config.title)
-    parser.add_argument(
-        "--evaluation-strategy",
-        choices=("nested", "holdout"),
-        default="nested",
-        help="Preferred protocol is nested 5x3; holdout uses 20%% test + 3-fold inner CV.",
-    )
-    parser.add_argument("--models", nargs="+", default=None, help="Subset of models to run.")
-    parser.add_argument(
-        "--skip-catboost",
-        action="store_true",
-        help="Skip CatBoost even if the dependency is available.",
-    )
-    parser.add_argument("--outer-folds", type=int, default=OUTER_FOLDS)
-    parser.add_argument("--inner-folds", type=int, default=INNER_FOLDS)
-    parser.add_argument("--test-size", type=float, default=HOLDOUT_TEST_SIZE)
-    parser.add_argument("--random-seed", type=int, default=RANDOM_SEED)
-    parser.add_argument("--top-k-importance", type=int, default=20)
-    return parser
-
-
 def scoring_config(task_config: TaskConfig):
     if task_config.problem_type == "regression":
         return regression_scoring(), "mae"
     include_pr_auc = task_config.primary_metric == "pr_auc"
-    return classification_scoring(include_pr_auc=include_pr_auc), task_config.primary_metric
+    return (
+        classification_scoring(include_pr_auc=include_pr_auc),
+        task_config.primary_metric,
+    )
 
 
 def prediction_scores(fitted_model, x_frame: pd.DataFrame):
@@ -126,11 +161,13 @@ def fit_search(
     estimator = build_model_pipeline(
         estimator=model_spec.estimator_factory(),
         requires_scaling=model_spec.requires_scaling,
-        use_log_target=task_config.problem_type == "regression" and task_config.use_log_target,
+        use_log_target=task_config.problem_type == "regression"
+        and task_config.use_log_target,
     )
     param_grid = prefix_param_grid(
         model_spec.param_grid,
-        use_log_target=task_config.problem_type == "regression" and task_config.use_log_target,
+        use_log_target=task_config.problem_type == "regression"
+        and task_config.use_log_target,
     )
     scoring, refit_metric = scoring_config(task_config)
     search = GridSearchCV(
@@ -139,14 +176,16 @@ def fit_search(
         scoring=scoring,
         refit=refit_metric,
         cv=make_splitter(task_config.problem_type, inner_folds, seed),
-        n_jobs=-1,
+        n_jobs=1,
         error_score="raise",
     )
     search.fit(x_train, y_train)
     return search
 
 
-def compute_task_metrics(task_config: TaskConfig, y_true, y_pred, y_score=None) -> dict[str, float]:
+def compute_task_metrics(
+    task_config: TaskConfig, y_true, y_pred, y_score=None
+) -> dict[str, float]:
     if task_config.problem_type == "regression":
         return compute_regression_metrics(y_true, y_pred)
     return compute_classification_metrics(
@@ -157,7 +196,9 @@ def compute_task_metrics(task_config: TaskConfig, y_true, y_pred, y_score=None) 
     )
 
 
-def extract_feature_importance(fitted_model, feature_columns: list[str]) -> pd.DataFrame | None:
+def extract_feature_importance(
+    fitted_model, feature_columns: list[str]
+) -> pd.DataFrame | None:
     estimator = extract_final_estimator(fitted_model)
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
@@ -174,7 +215,9 @@ def extract_feature_importance(fitted_model, feature_columns: list[str]) -> pd.D
             "abs_importance": np.abs(values),
         }
     )
-    return importance_frame.sort_values("abs_importance", ascending=False).reset_index(drop=True)
+    return importance_frame.sort_values("abs_importance", ascending=False).reset_index(
+        drop=True
+    )
 
 
 def summarize_model_run(
@@ -318,7 +361,9 @@ def evaluate_direct_model(
         seed=seed + 999,
     )
     final_best_params = clean_param_names(final_search.best_params_)
-    importance_df = extract_feature_importance(final_search.best_estimator_, feature_columns)
+    importance_df = extract_feature_importance(
+        final_search.best_estimator_, feature_columns
+    )
     fold_metrics = pd.DataFrame(fold_rows)
 
     return EvaluatedModel(
@@ -359,15 +404,9 @@ def evaluate_indirect_si_model(
     fold_rows: list[dict] = []
     y_true_all: list[np.ndarray] = []
     y_pred_all: list[np.ndarray] = []
-
-    ratio_task = TaskConfig(
-        name="regression_si",
-        title="Regression: SI indirect",
-        problem_type="regression",
-        target_column=TARGET_COLUMNS["SI"],
-        primary_metric="mae",
-        use_log_target=True,
-    )
+    ratio_task = TASKS["regression_si"]
+    ic50_task = TASKS["regression_ic50"]
+    cc50_task = TASKS["regression_cc50"]
 
     if evaluation_strategy == "nested":
         outer_splitter = make_splitter("regression", outer_folds, seed)
@@ -385,14 +424,7 @@ def evaluate_indirect_si_model(
 
             ic50_search = fit_search(
                 model_spec=model_spec,
-                task_config=TaskConfig(
-                    name="regression_ic50",
-                    title="Regression: IC50",
-                    problem_type="regression",
-                    target_column=TARGET_COLUMNS["IC50"],
-                    primary_metric="mae",
-                    use_log_target=True,
-                ),
+                task_config=ic50_task,
                 x_train=x_train,
                 y_train=ic50_train,
                 inner_folds=inner_folds,
@@ -400,22 +432,19 @@ def evaluate_indirect_si_model(
             )
             cc50_search = fit_search(
                 model_spec=model_spec,
-                task_config=TaskConfig(
-                    name="regression_cc50",
-                    title="Regression: CC50",
-                    problem_type="regression",
-                    target_column=TARGET_COLUMNS["CC50"],
-                    primary_metric="mae",
-                    use_log_target=True,
-                ),
+                task_config=cc50_task,
                 x_train=x_train,
                 y_train=cc50_train,
                 inner_folds=inner_folds,
                 seed=seed + 100 + fold_index,
             )
 
-            ic50_pred = clip_regression_predictions(ic50_search.best_estimator_.predict(x_test))
-            cc50_pred = clip_regression_predictions(cc50_search.best_estimator_.predict(x_test))
+            ic50_pred = clip_regression_predictions(
+                ic50_search.best_estimator_.predict(x_test)
+            )
+            cc50_pred = clip_regression_predictions(
+                cc50_search.best_estimator_.predict(x_test)
+            )
             si_pred = cc50_pred / np.clip(ic50_pred, 1e-8, None)
             metrics = compute_regression_metrics(si_test, si_pred)
             metrics.update(
@@ -423,8 +452,12 @@ def evaluate_indirect_si_model(
                     "fold": fold_index,
                     "best_params_json": json.dumps(
                         {
-                            "ic50_component": clean_param_names(ic50_search.best_params_),
-                            "cc50_component": clean_param_names(cc50_search.best_params_),
+                            "ic50_component": clean_param_names(
+                                ic50_search.best_params_
+                            ),
+                            "cc50_component": clean_param_names(
+                                cc50_search.best_params_
+                            ),
                         },
                         ensure_ascii=False,
                         sort_keys=True,
@@ -435,7 +468,16 @@ def evaluate_indirect_si_model(
             y_true_all.append(np.asarray(si_test))
             y_pred_all.append(np.asarray(si_pred))
     else:
-        x_train, x_test, ic50_train, ic50_test, cc50_train, cc50_test, si_train, si_test = train_test_split(
+        (
+            x_train,
+            x_test,
+            ic50_train,
+            ic50_test,
+            cc50_train,
+            cc50_test,
+            si_train,
+            si_test,
+        ) = train_test_split(
             x_frame,
             y_ic50,
             y_cc50,
@@ -445,14 +487,7 @@ def evaluate_indirect_si_model(
         )
         ic50_search = fit_search(
             model_spec=model_spec,
-            task_config=TaskConfig(
-                name="regression_ic50",
-                title="Regression: IC50",
-                problem_type="regression",
-                target_column=TARGET_COLUMNS["IC50"],
-                primary_metric="mae",
-                use_log_target=True,
-            ),
+            task_config=ic50_task,
             x_train=x_train,
             y_train=ic50_train,
             inner_folds=inner_folds,
@@ -460,21 +495,18 @@ def evaluate_indirect_si_model(
         )
         cc50_search = fit_search(
             model_spec=model_spec,
-            task_config=TaskConfig(
-                name="regression_cc50",
-                title="Regression: CC50",
-                problem_type="regression",
-                target_column=TARGET_COLUMNS["CC50"],
-                primary_metric="mae",
-                use_log_target=True,
-            ),
+            task_config=cc50_task,
             x_train=x_train,
             y_train=cc50_train,
             inner_folds=inner_folds,
             seed=seed + 100,
         )
-        ic50_pred = clip_regression_predictions(ic50_search.best_estimator_.predict(x_test))
-        cc50_pred = clip_regression_predictions(cc50_search.best_estimator_.predict(x_test))
+        ic50_pred = clip_regression_predictions(
+            ic50_search.best_estimator_.predict(x_test)
+        )
+        cc50_pred = clip_regression_predictions(
+            cc50_search.best_estimator_.predict(x_test)
+        )
         si_pred = cc50_pred / np.clip(ic50_pred, 1e-8, None)
         metrics = compute_regression_metrics(si_test, si_pred)
         metrics.update(
@@ -496,14 +528,7 @@ def evaluate_indirect_si_model(
 
     ic50_final = fit_search(
         model_spec=model_spec,
-        task_config=TaskConfig(
-            name="regression_ic50",
-            title="Regression: IC50",
-            problem_type="regression",
-            target_column=TARGET_COLUMNS["IC50"],
-            primary_metric="mae",
-            use_log_target=True,
-        ),
+        task_config=ic50_task,
         x_train=x_frame,
         y_train=y_ic50,
         inner_folds=inner_folds,
@@ -511,14 +536,7 @@ def evaluate_indirect_si_model(
     )
     cc50_final = fit_search(
         model_spec=model_spec,
-        task_config=TaskConfig(
-            name="regression_cc50",
-            title="Regression: CC50",
-            problem_type="regression",
-            target_column=TARGET_COLUMNS["CC50"],
-            primary_metric="mae",
-            use_log_target=True,
-        ),
+        task_config=cc50_task,
         x_train=x_frame,
         y_train=y_cc50,
         inner_folds=inner_folds,
@@ -530,8 +548,12 @@ def evaluate_indirect_si_model(
         "cc50_component": clean_param_names(cc50_final.best_params_),
     }
     component_importances = {
-        "ic50_component": extract_feature_importance(ic50_final.best_estimator_, feature_columns),
-        "cc50_component": extract_feature_importance(cc50_final.best_estimator_, feature_columns),
+        "ic50_component": extract_feature_importance(
+            ic50_final.best_estimator_, feature_columns
+        ),
+        "cc50_component": extract_feature_importance(
+            cc50_final.best_estimator_, feature_columns
+        ),
     }
 
     return EvaluatedModel(
@@ -558,8 +580,10 @@ def evaluate_indirect_si_model(
 
 def save_confusion_matrix_artifact(task_dir: Path, y_true, y_pred) -> Path:
     figure, axis = plt.subplots(figsize=(4.5, 4.5))
-    ConfusionMatrixDisplay.from_predictions(y_true, y_pred, ax=axis, cmap="Blues", colorbar=False)
-    axis.set_title("Winner Confusion Matrix")
+    ConfusionMatrixDisplay.from_predictions(
+        y_true, y_pred, ax=axis, cmap="Blues", colorbar=False
+    )
+    axis.set_title("Матрица ошибок победившей модели")
     figure.tight_layout()
     output_path = task_dir / "winner_confusion_matrix.png"
     figure.savefig(output_path, dpi=200, bbox_inches="tight")
@@ -567,13 +591,19 @@ def save_confusion_matrix_artifact(task_dir: Path, y_true, y_pred) -> Path:
     return output_path
 
 
-def save_evaluated_model(task_dir: Path, run: EvaluatedModel, top_k_importance: int) -> dict:
-    write_dataframe(task_dir / f"{run.model_name}_{run.mode}_fold_metrics.csv", run.fold_metrics)
+def save_evaluated_model(
+    task_dir: Path, run: EvaluatedModel, top_k_importance: int
+) -> dict:
+    write_dataframe(
+        task_dir / f"{run.model_name}_{run.mode}_fold_metrics.csv", run.fold_metrics
+    )
     write_json(task_dir / f"{run.model_name}_{run.mode}_summary.json", run.summary)
 
     saved_artifacts = {}
     if run.importance_df is not None:
-        importance_path = task_dir / f"{run.model_name}_{run.mode}_feature_importance.csv"
+        importance_path = (
+            task_dir / f"{run.model_name}_{run.mode}_feature_importance.csv"
+        )
         write_dataframe(importance_path, run.importance_df.head(top_k_importance))
         saved_artifacts["feature_importance_path"] = str(importance_path)
 
@@ -582,7 +612,10 @@ def save_evaluated_model(task_dir: Path, run: EvaluatedModel, top_k_importance: 
         for component_name, component_frame in run.component_importances.items():
             if component_frame is None:
                 continue
-            component_path = task_dir / f"{run.model_name}_{run.mode}_{component_name}_feature_importance.csv"
+            component_path = (
+                task_dir
+                / f"{run.model_name}_{run.mode}_{component_name}_feature_importance.csv"
+            )
             write_dataframe(component_path, component_frame.head(top_k_importance))
             component_paths[component_name] = str(component_path)
         if component_paths:
@@ -603,26 +636,28 @@ def render_task_report(
     lines = [
         f"# {task_config.title}",
         "",
-        "## Methodology",
-        f"- Evaluation strategy: `{strategy_text}`",
-        f"- Dataset path: `{data_contract['dataset_path']}`",
-        f"- Dataset checksum (SHA256): `{data_contract['checksum_sha256']}`",
-        f"- Feature count after leakage guard: `{data_contract['feature_count']}`",
-        f"- Leakage validation status: `{leakage_report['status']}`",
-        f"- Primary metric: `{task_config.primary_metric}`",
+        "## Методология",
+        f"- Стратегия оценки: `{strategy_text}`",
+        f"- Путь к датасету: `{data_contract['dataset_path']}`",
+        f"- Контрольная сумма датасета (SHA256): `{data_contract['checksum_sha256']}`",
+        f"- Число признаков после anti-leakage guard: `{data_contract['feature_count']}`",
+        f"- Статус проверки на утечку: `{localize_leakage_status(leakage_report['status'])}`",
+        f"- Основная метрика: `{task_config.primary_metric}`",
     ]
 
     if task_config.problem_type == "regression":
-        lines.append(f"- Target log1p transform: `{task_config.use_log_target}`")
+        lines.append(
+            f"- Логарифмическое преобразование target через log1p: `{task_config.use_log_target}`"
+        )
     if label_distribution is not None:
-        lines.append(f"- Label balance: `{label_distribution}`")
+        lines.append(f"- Баланс классов: `{label_distribution}`")
 
     lines.extend(
         [
             "",
-            "## Winner",
-            f"- Model: `{winner_row['model_name']}`",
-            f"- Mode: `{winner_row['mode']}`",
+            "## Победитель",
+            f"- Модель: `{winner_row['model_name']}`",
+            f"- Режим: `{localize_report_value('mode', winner_row['mode'])}`",
             f"- {task_config.primary_metric}: `{winner_row[task_config.primary_metric]:.6f}`",
         ]
     )
@@ -637,10 +672,10 @@ def render_task_report(
     lines.extend(
         [
             "",
-            "## Leaderboard",
-            leaderboard.to_markdown(index=False),
+            "## Сводная таблица",
+            leaderboard_to_markdown(leaderboard),
             "",
-            "## Leakage Checklist",
+            "## Чек-лист по утечке данных",
         ]
     )
     for item in leakage_report["checklist"]:
@@ -652,8 +687,11 @@ def run_supervised_task(task_config: TaskConfig, args) -> dict:
     ensure_project_dirs()
     task_dir = ensure_dir(RESULTS_DIR / task_config.name)
     logger = setup_logger(task_config.name, task_dir / "run.log")
-    prepared = prepare_task_data(task_config)
-    write_json(RESULTS_DIR / "data_contract.json", prepared["data_contract"])
+    dataset_path = find_dataset_path()
+    dataframe = load_dataset(dataset_path)
+    prepared = prepare_task_data(dataframe, task_config)
+    data_contract = build_data_contract(dataframe, dataset_path)
+    write_json(RESULTS_DIR / "data_contract.json", data_contract)
     write_json(task_dir / "leakage_check.json", prepared["leakage_report"])
 
     label_distribution = None
@@ -666,7 +704,11 @@ def run_supervised_task(task_config: TaskConfig, args) -> dict:
         include_catboost=not args.skip_catboost,
     )
 
-    logger.info("Running %s with models: %s", task_config.name, [spec.name for spec in model_specs])
+    logger.info(
+        "Running %s with models: %s",
+        task_config.name,
+        [spec.name for spec in model_specs],
+    )
 
     model_runs: list[EvaluatedModel] = []
     for model_spec in model_specs:
@@ -695,7 +737,9 @@ def run_supervised_task(task_config: TaskConfig, args) -> dict:
 
     winner_row = leaderboard.iloc[0]
     winner_run = next(
-        run for run in model_runs if run.model_name == winner_row["model_name"] and run.mode == winner_row["mode"]
+        run
+        for run in model_runs
+        if run.model_name == winner_row["model_name"] and run.mode == winner_row["mode"]
     )
 
     summary = {
@@ -714,18 +758,22 @@ def run_supervised_task(task_config: TaskConfig, args) -> dict:
     }
 
     if task_config.problem_type == "classification":
-        confusion_path = save_confusion_matrix_artifact(task_dir, winner_run.y_true, winner_run.y_pred)
+        confusion_path = save_confusion_matrix_artifact(
+            task_dir, winner_run.y_true, winner_run.y_pred
+        )
         summary["winner_confusion_matrix_path"] = str(confusion_path)
 
     if winner_run.importance_df is not None:
         importance_path = task_dir / "winner_feature_importance.csv"
-        write_dataframe(importance_path, winner_run.importance_df.head(args.top_k_importance))
+        write_dataframe(
+            importance_path, winner_run.importance_df.head(args.top_k_importance)
+        )
         summary["winner_feature_importance_path"] = str(importance_path)
 
     write_json(task_dir / "summary.json", summary)
     report_text = render_task_report(
         task_config=task_config,
-        data_contract=prepared["data_contract"],
+        data_contract=data_contract,
         leakage_report=prepared["leakage_report"],
         leaderboard=leaderboard,
         winner_row=winner_row,
@@ -749,8 +797,11 @@ def run_regression_si_task(task_config: TaskConfig, args) -> dict:
     indirect_dir = ensure_dir(task_dir / "indirect")
     logger = setup_logger(task_config.name, task_dir / "run.log")
 
-    prepared = prepare_task_data(task_config)
-    write_json(RESULTS_DIR / "data_contract.json", prepared["data_contract"])
+    dataset_path = find_dataset_path()
+    dataframe = load_dataset(dataset_path)
+    prepared = prepare_task_data(dataframe, task_config)
+    data_contract = build_data_contract(dataframe, dataset_path)
+    write_json(RESULTS_DIR / "data_contract.json", data_contract)
     write_json(task_dir / "leakage_check.json", prepared["leakage_report"])
 
     model_specs = resolve_model_specs(
@@ -758,7 +809,10 @@ def run_regression_si_task(task_config: TaskConfig, args) -> dict:
         selected_models=args.models,
         include_catboost=not args.skip_catboost,
     )
-    logger.info("Running SI direct vs indirect with models: %s", [spec.name for spec in model_specs])
+    logger.info(
+        "Running SI direct vs indirect with models: %s",
+        [spec.name for spec in model_specs],
+    )
 
     direct_runs: list[EvaluatedModel] = []
     indirect_runs: list[EvaluatedModel] = []
@@ -783,9 +837,9 @@ def run_regression_si_task(task_config: TaskConfig, args) -> dict:
         logger.info("Evaluating indirect SI model %s", model_spec.name)
         indirect_run = evaluate_indirect_si_model(
             x_frame=prepared["X"],
-            y_ic50=prepared["dataframe"][TARGET_COLUMNS["IC50"]].astype(float),
-            y_cc50=prepared["dataframe"][TARGET_COLUMNS["CC50"]].astype(float),
-            y_si=prepared["dataframe"][TARGET_COLUMNS["SI"]].astype(float),
+            y_ic50=dataframe[TASKS["regression_ic50"].target_column].astype(float),
+            y_cc50=dataframe[TASKS["regression_cc50"].target_column].astype(float),
+            y_si=dataframe[TASKS["regression_si"].target_column].astype(float),
             feature_columns=prepared["feature_columns"],
             model_spec=model_spec,
             evaluation_strategy=args.evaluation_strategy,
@@ -798,7 +852,9 @@ def run_regression_si_task(task_config: TaskConfig, args) -> dict:
         indirect_runs.append(indirect_run)
 
     leaderboard = pd.DataFrame([run.summary for run in direct_runs + indirect_runs])
-    leaderboard = leaderboard.sort_values(by="mae", ascending=True).reset_index(drop=True)
+    leaderboard = leaderboard.sort_values(by="mae", ascending=True).reset_index(
+        drop=True
+    )
     write_dataframe(task_dir / "leaderboard.csv", leaderboard)
 
     best_direct = leaderboard[leaderboard["mode"] == "direct"].iloc[0]
@@ -820,47 +876,61 @@ def run_regression_si_task(task_config: TaskConfig, args) -> dict:
     }
 
     direct_winner_run = next(
-        run for run in direct_runs if run.model_name == best_direct["model_name"] and run.mode == "direct"
+        run
+        for run in direct_runs
+        if run.model_name == best_direct["model_name"] and run.mode == "direct"
     )
     indirect_winner_run = next(
-        run for run in indirect_runs if run.model_name == best_indirect["model_name"] and run.mode == "indirect"
+        run
+        for run in indirect_runs
+        if run.model_name == best_indirect["model_name"] and run.mode == "indirect"
     )
 
     if direct_winner_run.importance_df is not None:
         direct_importance_path = task_dir / "winner_feature_importance_direct.csv"
-        write_dataframe(direct_importance_path, direct_winner_run.importance_df.head(args.top_k_importance))
+        write_dataframe(
+            direct_importance_path,
+            direct_winner_run.importance_df.head(args.top_k_importance),
+        )
         summary["winner_feature_importance_direct_path"] = str(direct_importance_path)
 
     if indirect_winner_run.component_importances:
-        for component_name, component_frame in indirect_winner_run.component_importances.items():
+        for (
+            component_name,
+            component_frame,
+        ) in indirect_winner_run.component_importances.items():
             if component_frame is None:
                 continue
-            component_path = task_dir / f"winner_feature_importance_indirect_{component_name}.csv"
+            component_path = (
+                task_dir / f"winner_feature_importance_indirect_{component_name}.csv"
+            )
             write_dataframe(component_path, component_frame.head(args.top_k_importance))
-            summary.setdefault("winner_feature_importance_indirect_paths", {})[component_name] = str(component_path)
+            summary.setdefault("winner_feature_importance_indirect_paths", {})[
+                component_name
+            ] = str(component_path)
 
     write_json(task_dir / "summary.json", summary)
 
     report_lines = [
         f"# {task_config.title}",
         "",
-        "## Methodology",
-        f"- Evaluation strategy: `{describe_evaluation_strategy(args.evaluation_strategy, args.outer_folds, args.inner_folds, args.test_size)}`",
-        f"- Dataset path: `{prepared['data_contract']['dataset_path']}`",
-        f"- Leakage validation status: `{prepared['leakage_report']['status']}`",
-        "- Direct model: `SI ~ descriptors`",
-        "- Indirect model: `SI_hat = CC50_hat / IC50_hat`",
-        "- Target log1p transform on component regressions: `True`",
+        "## Методология",
+        f"- Стратегия оценки: `{describe_evaluation_strategy(args.evaluation_strategy, args.outer_folds, args.inner_folds, args.test_size)}`",
+        f"- Путь к датасету: `{data_contract['dataset_path']}`",
+        f"- Статус проверки на утечку: `{localize_leakage_status(prepared['leakage_report']['status'])}`",
+        "- Прямая модель: `SI ~ descriptors`",
+        "- Косвенная модель: `SI_hat = CC50_hat / IC50_hat`",
+        "- Логарифмическое преобразование target в компонентных регрессиях: `True`",
         "",
-        "## Direct vs Indirect",
-        f"- Best direct model: `{best_direct['model_name']}` with `MAE={best_direct['mae']:.6f}`",
-        f"- Best indirect model: `{best_indirect['model_name']}` with `MAE={best_indirect['mae']:.6f}`",
-        f"- Overall winner: `{overall_winner['mode']}::{overall_winner['model_name']}`",
+        "## Прямой и косвенный подходы",
+        f"- Лучшая прямая модель: `{best_direct['model_name']}` с `MAE={best_direct['mae']:.6f}`",
+        f"- Лучшая косвенная модель: `{best_indirect['model_name']}` с `MAE={best_indirect['mae']:.6f}`",
+        f"- Общий победитель: `{localize_report_value('mode', overall_winner['mode'])}::{overall_winner['model_name']}`",
         "",
-        "## Combined Leaderboard",
-        leaderboard.to_markdown(index=False),
+        "## Общая сводная таблица",
+        leaderboard_to_markdown(leaderboard),
         "",
-        "## Leakage Checklist",
+        "## Чек-лист по утечке данных",
     ]
     for item in prepared["leakage_report"]["checklist"]:
         report_lines.append(f"- {item}")

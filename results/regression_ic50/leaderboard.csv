@@ -1,5 +1,0 @@
-task_name,problem_type,target_column,primary_metric,evaluation_strategy,model_name,mode,fit_seconds,best_params_json,mae,mae_std,rmse,rmse_std,r2,r2_std
-regression_ic50,regression,"IC50, mM",mae,holdout,random_forest,direct,14.27898908300267,"{""max_depth"": null, ""max_features"": 0.5, ""min_samples_leaf"": 1}",219.15992576812994,0.0,478.3251541753931,0.0,0.3140799664364864,0.0
-regression_ic50,regression,"IC50, mM",mae,holdout,svr,direct,0.8022432919970015,"{""C"": 1.0, ""epsilon"": 0.01, ""gamma"": ""scale""}",230.24122293601616,0.0,517.8252444058228,0.0,0.19611581503947773,0.0
-regression_ic50,regression,"IC50, mM",mae,holdout,ridge,direct,1.5346567499946104,"{""alpha"": 1.0}",232.61186633278794,0.0,508.9342040959232,0.0,0.2234841473428365,0.0
-regression_ic50,regression,"IC50, mM",mae,holdout,dummy,direct,1.733601792002446,"{""strategy"": ""median""}",278.88112597827575,0.0,629.993922602542,0.0,-0.18987069072567642,0.0

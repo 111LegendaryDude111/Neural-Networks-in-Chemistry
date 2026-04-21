@@ -1,9 +1,0 @@
-task_name,target_column,threshold,label,count
-ic50_gt_median,"IC50, mM",46.585183,0,500
-ic50_gt_median,"IC50, mM",46.585183,1,501
-cc50_gt_median,"CC50, mM",411.039342,0,500
-cc50_gt_median,"CC50, mM",411.039342,1,501
-si_gt_median,SI,3.846154,0,501
-si_gt_median,SI,3.846154,1,500
-si_gt_8,SI,8.0,0,644
-si_gt_8,SI,8.0,1,357

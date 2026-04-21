@@ -1,2 +1,0 @@
-mae,rmse,r2,fold,best_params_json
-178.36735326162378,1418.4139159408967,-0.0016021974875524148,holdout,"{""max_depth"": 16, ""max_features"": ""sqrt"", ""min_samples_leaf"": 5}"

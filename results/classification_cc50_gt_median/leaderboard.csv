@@ -1,5 +1,0 @@
-task_name,problem_type,target_column,primary_metric,evaluation_strategy,model_name,mode,fit_seconds,best_params_json,roc_auc,roc_auc_std,f1,f1_std,balanced_accuracy,balanced_accuracy_std
-classification_cc50_gt_median,classification,"CC50, mM",roc_auc,holdout,random_forest,direct,21.245754957999452,"{""class_weight"": ""balanced"", ""max_depth"": 8, ""max_features"": 0.5, ""min_samples_leaf"": 1}",0.8544554455445544,0.0,0.7641509433962265,0.0,0.750990099009901,0.0
-classification_cc50_gt_median,classification,"CC50, mM",roc_auc,holdout,logistic_regression,direct,1.137782124991645,"{""C"": 0.1, ""class_weight"": null}",0.8373267326732674,0.0,0.7557603686635944,0.0,0.7359405940594059,0.0
-classification_cc50_gt_median,classification,"CC50, mM",roc_auc,holdout,svc,direct,1.6770352909952635,"{""C"": 1.0, ""class_weight"": null, ""gamma"": ""scale""}",0.8328712871287128,0.0,0.7793427230046949,0.0,0.7658910891089108,0.0
-classification_cc50_gt_median,classification,"CC50, mM",roc_auc,holdout,dummy,direct,2.0406846670084633,"{""strategy"": ""stratified""}",0.4475247524752475,0.0,0.43564356435643564,0.0,0.4328217821782178,0.0

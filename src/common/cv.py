@@ -11,6 +11,5 @@ def make_splitter(problem_type: str, n_splits: int, seed: int):
 
 def describe_evaluation_strategy(strategy: str, outer_folds: int, inner_folds: int, test_size: float) -> str:
     if strategy == "nested":
-        return f"nested CV ({outer_folds} outer folds x {inner_folds} inner folds)"
-    return f"holdout ({test_size:.0%} test) + inner CV ({inner_folds} folds)"
-
+        return f"вложенная CV ({outer_folds} внешних фолдов x {inner_folds} внутренних фолдов)"
+    return f"holdout ({test_size:.0%} тест) + внутренняя CV ({inner_folds} фолда)"

@@ -1,2 +1,0 @@
-mae,rmse,r2,fold,best_params_json
-4795482.86490451,67985138.01259941,-2301003443.872135,holdout,"{""cc50_component"": {""alpha"": 1.0}, ""ic50_component"": {""alpha"": 100.0}}"

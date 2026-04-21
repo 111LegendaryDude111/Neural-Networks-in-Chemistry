@@ -1,2 +1,0 @@
-mae,rmse,r2,fold,best_params_json
-507.2455196430975,762.6385317032215,-0.12183882927987133,holdout,"{""strategy"": ""median""}"

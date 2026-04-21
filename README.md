@@ -1,73 +1,42 @@
-# Chemical Activity Prediction Pipeline
+# ML для химических данных
 
-В репозитории реализован воспроизводимый ML pipeline для прогноза эффективности химических соединений по дескрипторам. Source of truth для методологии: `PDR.md` и `PDR-tasks.md`.
+В репозитории оставлено только то, что нужно для решения задания:
 
-## Что решается
+- `data/data.xlsx` — исходные данные
+- `notebooks/eda.ipynb` — отдельный EDA
+- `notebooks/regression_ic50.ipynb`
+- `notebooks/regression_cc50.ipynb`
+- `notebooks/regression_si.ipynb`
+- `notebooks/classification_ic50_gt_median.ipynb`
+- `notebooks/classification_cc50_gt_median.ipynb`
+- `notebooks/classification_si_gt_median.ipynb`
+- `notebooks/classification_si_gt_8.ipynb`
+- `src/common/preprocessing.py` — единый источник всей логики препроцессинга
+- `src/common/training.py` — общий код для сравнения моделей и сохранения артефактов
+- `src/eda.py` — пересчёт таблиц и графиков для EDA
+- `src/comparison.py` — сводка по уже рассчитанным задачам
 
-- Регрессия: `IC50`, `CC50`, `SI`
-- Классификация:
-  - `IC50 > 46.585183`
-  - `CC50 > 411.039342`
-  - `SI > 3.846154`
-  - `SI > 8`
+Старые служебные документы, кэш, готовые артефакты и промежуточные отчёты удалены.
 
-## Data Contract
+## Как устроена работа
 
-- Dataset path: `data/Данные_для_курсовои_Классическое_МО.xlsx`
-- SHA256: `87fabec4e77159df7482ca480236712c031500d3935141b3231368d83a67c659`
-- Shape: `1001 x 214`
-- Descriptor features after leakage filtering: `210`
-- Missing values: `36`
-- Duplicates: `0`
-- Target columns: `IC50, mM`, `CC50, mM`, `SI`
-- Fixed thresholds:
-  - `IC50 > 46.585183`
-  - `CC50 > 411.039342`
-  - `SI > 3.846154`
-  - `SI > 8`
+Каждый ноутбук соответствует одной задаче и запускается сверху вниз без ручной подготовки:
 
-## Leakage Policy
+- сам находит корень проекта;
+- подключает `src/`;
+- использует общий модуль препроцессинга;
+- запускает сравнение нескольких моделей;
+- пишет локальные артефакты в `results/` и `reports/`, если они нужны для текущего прогона.
 
-- В `X` попадают только дескрипторы.
-- Запрещённые колонки централизованы в коде: `Unnamed: 0`, `IC50`, `CC50`, `SI`, `IC50, mM`, `CC50, mM`.
-- Любые прямые производные targets тоже режутся регулярным anti-leakage guard по нормализованным именам колонок.
-- Перед каждой задачей выполняется явная валидация feature matrix и сохраняется `leakage_check.json`.
+EDA вынесен в отдельный ноутбук: [eda.ipynb](/Users/davidsukhashvili/Desktop/ML/MEPhi/ClassicMl/Neural%20Networks%20in%20Chemistry/notebooks/eda.ipynb).
 
-## Методология
+## Почему препроцессинг в одном месте
 
-- Regression metrics: `MAE` как primary, дополнительно `RMSE`, `R²`
-- Classification metrics: `ROC-AUC`, `F1`, `Balanced Accuracy`
-- Для `SI > 8` дополнительно считается и сохраняется `PR-AUC`, он используется как primary metric
-- Предпочтительная стратегия: nested CV `5x3`
-- Fallback для быстрых прогонов: holdout `20%` + inner CV `3-fold`
-- Из-за сильной положительной асимметрии targets в регрессии включён прозрачный `log1p`-target transform
-- Для `SI` реализованы оба режима:
-  - `direct`: `SI ~ descriptors`
-  - `indirect`: `SI_hat = CC50_hat / IC50_hat`
+Весь отбор признаков, защита от утечек, построение `X` и `y`, импутация, масштабирование и `log1p` для регрессии собраны в одном файле:
 
-## Структура
+[src/common/preprocessing.py](/Users/davidsukhashvili/Desktop/ML/MEPhi/ClassicMl/Neural%20Networks%20in%20Chemistry/src/common/preprocessing.py)
 
-```text
-.
-├── PDR.md
-├── PDR-tasks.md
-├── README.md
-├── requirements.txt
-├── data/
-├── reports/
-├── results/
-└── src/
-    ├── common/
-    ├── eda.py
-    ├── regression_ic50.py
-    ├── regression_cc50.py
-    ├── regression_si.py
-    ├── classification_ic50_gt_median.py
-    ├── classification_cc50_gt_median.py
-    ├── classification_si_gt_median.py
-    ├── classification_si_gt_8.py
-    └── comparison.py
-```
+Так проще проверять корректность и поддерживать единое поведение во всех задачах.
 
 ## Установка
 
@@ -78,86 +47,33 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Если `catboost` не устанавливается, пайплайн не блокируется:
+`ipykernel` уже включён в зависимости, поэтому ноутбуки можно сразу запускать через JupyterLab, Jupyter Notebook или VS Code.
 
-```bash
-python -m pip install -r requirements.txt --no-deps
-```
+## Что запускать
 
-и затем все task scripts можно запускать с флагом `--skip-catboost`.
+Основной сценарий:
 
-## Запуск
-
-EDA:
-
-```bash
-python -m src.eda
-```
-
-Регрессия:
-
-```bash
-python -m src.regression_ic50
-python -m src.regression_cc50
-python -m src.regression_si
-```
-
-Классификация:
-
-```bash
-python -m src.classification_ic50_gt_median
-python -m src.classification_cc50_gt_median
-python -m src.classification_si_gt_median
-python -m src.classification_si_gt_8
-```
-
-Сводное сравнение и финальный summary:
+1. Открыть `notebooks/eda.ipynb`.
+2. Затем последовательно запускать ноутбуки по задачам.
+3. После расчётов при необходимости собрать сводку:
 
 ```bash
 python -m src.comparison
 ```
 
-### Полезные флаги
-
-Полный протокол:
+Если нужно пересчитать только EDA без ноутбука:
 
 ```bash
-python -m src.regression_ic50 --evaluation-strategy nested
+python -m src.eda
 ```
 
-Быстрый fallback:
+## Что не хранится в репозитории
 
-```bash
-python -m src.regression_ic50 --evaluation-strategy holdout
-```
+По умолчанию не хранятся:
 
-Отключить CatBoost:
+- `results/`
+- `reports/`
+- `__pycache__/`
+- локальное окружение `.venv/`
 
-```bash
-python -m src.classification_si_gt_8 --skip-catboost
-```
-
-Запустить только часть моделей:
-
-```bash
-python -m src.regression_cc50 --models dummy ridge svr random_forest
-```
-
-## Артефакты
-
-- `results/data_contract.json` — зафиксированный data contract
-- `results/<task>/leaderboard.csv` — таблица моделей по задаче
-- `results/<task>/*_fold_metrics.csv` — CV/holdout метрики по модели
-- `results/<task>/winner_confusion_matrix.png` — confusion matrix для задач классификации
-- `results/<task>/winner_feature_importance*.csv` — importances / coefficients для победителя, если модель это поддерживает
-- `reports/eda_summary.md` — текстовые выводы по EDA
-- `reports/<task>.md` — выводы по каждой задаче
-- `reports/project_summary.md` — итоговый summary по проекту
-
-## Ограничения и Known Issues
-
-- Dataset маленький, поэтому variance метрик между сплитами может быть заметным.
-- `SI` имеет очень сильный skew; direct vs indirect нужно сравнивать только на одинаковой evaluation strategy.
-- `CatBoost` опционален: если пакет отсутствует, модели автоматически можно отключить через `--skip-catboost`.
-- Репозиторий не публикует raw data в артефактах; сохраняются только агрегированные таблицы, метрики и графики.
-
+Эти файлы и каталоги создаются локально по ходу работы и не нужны для самой реализации.

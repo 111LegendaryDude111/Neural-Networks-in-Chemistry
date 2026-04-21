@@ -20,10 +20,10 @@ class TaskConfig:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
+NOTEBOOKS_DIR = REPO_ROOT / "notebooks"
 RESULTS_DIR = REPO_ROOT / "results"
 REPORTS_DIR = REPO_ROOT / "reports"
 
-# PREFERRED_DATASET_NAME = "Данные_для_курсовои_Классическое_МО.xlsx"
 PREFERRED_DATASET_NAME = "data.xlsx"
 PREFERRED_DATASET_PATH = DATA_DIR / PREFERRED_DATASET_NAME
 
@@ -50,22 +50,33 @@ LEAKAGE_TOKEN_PATTERNS = (
 )
 
 FIXED_THRESHOLDS = {
-    "ic50_gt_median": 46.585183,
-    "cc50_gt_median": 411.039342,
-    "si_gt_median": 3.846154,
-    "si_gt_8": 8.0,
+    "classification_ic50_gt_median": 46.585183,
+    "classification_cc50_gt_median": 411.039342,
+    "classification_si_gt_median": 3.846154,
+    "classification_si_gt_8": 8.0,
 }
 
 RANDOM_SEED = 42
 OUTER_FOLDS = 5
 INNER_FOLDS = 3
 HOLDOUT_TEST_SIZE = 0.2
+TOP_K_IMPORTANCE = 20
 EPSILON = 1e-8
 
-REGRESSION_TASKS = {
+TASK_ORDER = [
+    "regression_ic50",
+    "regression_cc50",
+    "regression_si",
+    "classification_ic50_gt_median",
+    "classification_cc50_gt_median",
+    "classification_si_gt_median",
+    "classification_si_gt_8",
+]
+
+TASKS = {
     "regression_ic50": TaskConfig(
         name="regression_ic50",
-        title="Regression: IC50",
+        title="Регрессия: IC50",
         problem_type="regression",
         target_column=TARGET_COLUMNS["IC50"],
         primary_metric="mae",
@@ -73,7 +84,7 @@ REGRESSION_TASKS = {
     ),
     "regression_cc50": TaskConfig(
         name="regression_cc50",
-        title="Regression: CC50",
+        title="Регрессия: CC50",
         problem_type="regression",
         target_column=TARGET_COLUMNS["CC50"],
         primary_metric="mae",
@@ -81,48 +92,53 @@ REGRESSION_TASKS = {
     ),
     "regression_si": TaskConfig(
         name="regression_si",
-        title="Regression: SI (direct vs indirect)",
+        title="Регрессия: SI",
         problem_type="regression",
         target_column=TARGET_COLUMNS["SI"],
         primary_metric="mae",
         use_log_target=True,
     ),
-}
-
-CLASSIFICATION_TASKS = {
     "classification_ic50_gt_median": TaskConfig(
         name="classification_ic50_gt_median",
-        title="Classification: IC50 > 46.585183",
+        title="Классификация: IC50 > 46.585183",
         problem_type="classification",
         target_column=TARGET_COLUMNS["IC50"],
-        threshold=FIXED_THRESHOLDS["ic50_gt_median"],
+        threshold=FIXED_THRESHOLDS["classification_ic50_gt_median"],
         primary_metric="roc_auc",
     ),
     "classification_cc50_gt_median": TaskConfig(
         name="classification_cc50_gt_median",
-        title="Classification: CC50 > 411.039342",
+        title="Классификация: CC50 > 411.039342",
         problem_type="classification",
         target_column=TARGET_COLUMNS["CC50"],
-        threshold=FIXED_THRESHOLDS["cc50_gt_median"],
+        threshold=FIXED_THRESHOLDS["classification_cc50_gt_median"],
         primary_metric="roc_auc",
     ),
     "classification_si_gt_median": TaskConfig(
         name="classification_si_gt_median",
-        title="Classification: SI > 3.846154",
+        title="Классификация: SI > 3.846154",
         problem_type="classification",
         target_column=TARGET_COLUMNS["SI"],
-        threshold=FIXED_THRESHOLDS["si_gt_median"],
+        threshold=FIXED_THRESHOLDS["classification_si_gt_median"],
         primary_metric="roc_auc",
     ),
     "classification_si_gt_8": TaskConfig(
         name="classification_si_gt_8",
-        title="Classification: SI > 8",
+        title="Классификация: SI > 8",
         problem_type="classification",
         target_column=TARGET_COLUMNS["SI"],
-        threshold=FIXED_THRESHOLDS["si_gt_8"],
+        threshold=FIXED_THRESHOLDS["classification_si_gt_8"],
         primary_metric="pr_auc",
     ),
 }
 
-ALL_TASKS = {**REGRESSION_TASKS, **CLASSIFICATION_TASKS}
-
+REGRESSION_TASK_NAMES = [
+    task_name
+    for task_name in TASK_ORDER
+    if TASKS[task_name].problem_type == "regression"
+]
+CLASSIFICATION_TASK_NAMES = [
+    task_name
+    for task_name in TASK_ORDER
+    if TASKS[task_name].problem_type == "classification"
+]
